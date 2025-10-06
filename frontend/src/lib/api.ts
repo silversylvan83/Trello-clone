@@ -1,9 +1,6 @@
-// src/lib/api.ts
-import axios from 'axios';
+import axios from 'axios'
 
-export const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL,
-});
+export const API_BASE =
+  process.env.NEXT_PUBLIC_API_URL?.trim() || 'http://localhost:4000'
 
-// src/main.tsx
-document.title = import.meta.env.VITE_APP_NAME || 'Kanban App';
+export const api = axios.create({ baseURL: API_BASE })
