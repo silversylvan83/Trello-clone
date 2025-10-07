@@ -8,7 +8,6 @@ import authRoutes from './routes/auth.js';
 import boardRoutes from './routes/boards.js';
 import listRoutes from './routes/lists.js';
 import cardRoutes from './routes/cards.js';
-// ✅ fix typo: 'activites.js' → 'activities.js'
 import activityRoutes from './routes/activites.js';
 
 const app = express();
