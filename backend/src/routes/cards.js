@@ -11,13 +11,27 @@ function isObjectId(v) {
   return mongoose.Types.ObjectId.isValid(v);
 }
 
-// Resolve a board identifier that might be an ObjectId or a slug.
-// Returns ObjectId string or null if not found.
+
 async function resolveBoardId(idOrSlug) {
   if (!idOrSlug) return null;
-  if (isObjectId(idOrSlug)) return idOrSlug;
+  if (mongoose.Types.ObjectId.isValid(idOrSlug)) return idOrSlug;
+
+  // Try slug
   const board = await Board.findOne({ slug: idOrSlug }).select('_id').lean();
-  return board?._id?.toString() || null;
+  if (board?._id) return board._id.toString();
+
+  // Auto-create a default board on demand
+  if (idOrSlug === 'default') {
+    const created = await Board.create({
+      title: 'Default',          
+      slug: 'default',
+      // owner: req.user._id,     // ← add if your schema requires it
+      // visibility: 'private',   // ← add defaults as needed
+    });
+    return created._id.toString();
+  }
+
+  return null;
 }
 
 // ---------- list cards by board ----------

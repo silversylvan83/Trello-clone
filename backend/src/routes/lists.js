@@ -1,8 +1,8 @@
-import { Router } from 'express';
-import mongoose from 'mongoose';
-import List from '../models/List.js';
-import { auth } from '../middleware/auth.js';
-import Board from '../models/Board.js';
+import { Router } from "express";
+import mongoose from "mongoose";
+import List from "../models/List.js";
+import { auth } from "../middleware/auth.js";
+import Board from "../models/Board.js";
 
 const router = Router();
 
@@ -10,9 +10,25 @@ const router = Router();
 async function resolveBoardId(idOrSlug) {
   if (!idOrSlug) return null;
   if (mongoose.Types.ObjectId.isValid(idOrSlug)) return idOrSlug;
+
+  // Try slug
   const board = await Board.findOne({ slug: idOrSlug }).select('_id').lean();
-  return board?._id?.toString() || null;
+  if (board?._id) return board._id.toString();
+
+  // Auto-create a default board on demand
+  if (idOrSlug === 'default') {
+    const created = await Board.create({
+      title: 'Default',          // ← REQUIRED by your schema
+      slug: 'default',
+      // owner: req.user._id,     // ← add if your schema requires it
+      // visibility: 'private',   // ← add defaults as needed
+    });
+    return created._id.toString();
+  }
+
+  return null;
 }
+
 
 // Helper: tiny assert for ObjectId params
 function assertObjectId(id) {
@@ -20,13 +36,13 @@ function assertObjectId(id) {
 }
 
 // GET /api/lists?boardId=<idOrSlug>
-router.get('/', auth(false), async (req, res, next) => {
+router.get("/", auth(false), async (req, res, next) => {
   try {
     const { boardId } = req.query;
-    if (!boardId) return res.status(400).json({ error: 'boardId is required' });
+    if (!boardId) return res.status(400).json({ error: "boardId is required" });
 
     const resolved = await resolveBoardId(boardId);
-    if (!resolved) return res.status(404).json({ error: 'Board not found' });
+    if (!resolved) return res.status(404).json({ error: "Board not found" });
 
     const items = await List.find({ boardId: resolved })
       .sort({ order: 1 })
@@ -39,19 +55,19 @@ router.get('/', auth(false), async (req, res, next) => {
 });
 
 // POST /api/lists  { boardId: <idOrSlug>, title: string }
-router.post('/', auth(), async (req, res, next) => {
+router.post("/", auth(), async (req, res, next) => {
   try {
     const { boardId, title } = req.body;
     if (!boardId || !title?.trim())
-      return res.status(400).json({ error: 'boardId and title are required' });
+      return res.status(400).json({ error: "boardId and title are required" });
 
     const resolved = await resolveBoardId(boardId);
-    if (!resolved) return res.status(404).json({ error: 'Board not found' });
+    if (!resolved) return res.status(404).json({ error: "Board not found" });
 
     // Find current max order (lean + select for speed)
     const last = await List.findOne({ boardId: resolved })
       .sort({ order: -1 })
-      .select('order')
+      .select("order")
       .lean();
 
     const order = last ? (Number(last.order) || 0) + 1 : 1;
@@ -63,7 +79,9 @@ router.post('/', auth(), async (req, res, next) => {
     });
 
     // Fire-and-forget: broadcasting shouldn't break the request
-    try { global.__boardEmit?.(resolved, 'list:created', list); } catch {}
+    try {
+      global.__boardEmit?.(resolved, "list:created", list);
+    } catch {}
 
     res.status(201).json(list);
   } catch (e) {
@@ -72,28 +90,31 @@ router.post('/', auth(), async (req, res, next) => {
 });
 
 // PATCH /api/lists/:id
-router.patch('/:id', auth(), async (req, res, next) => {
+router.patch("/:id", auth(), async (req, res, next) => {
   try {
     const { id } = req.params;
-    if (!assertObjectId(id)) return res.status(400).json({ error: 'Invalid list id' });
+    if (!assertObjectId(id))
+      return res.status(400).json({ error: "Invalid list id" });
 
     // Optional: forbid changing boardId via PATCH (safer). If you do want to allow it,
     // resolve it first like above and replace req.body.boardId with the resolved value.
-    if (typeof req.body.boardId !== 'undefined') delete req.body.boardId;
+    if (typeof req.body.boardId !== "undefined") delete req.body.boardId;
 
     const update = {};
-    if (typeof req.body.title === 'string') update.title = req.body.title.trim();
-    if (typeof req.body.order !== 'undefined') update.order = req.body.order;
+    if (typeof req.body.title === "string")
+      update.title = req.body.title.trim();
+    if (typeof req.body.order !== "undefined") update.order = req.body.order;
 
-    const list = await List.findByIdAndUpdate(
-      id,
-      update,
-      { new: true, runValidators: true }
-    );
+    const list = await List.findByIdAndUpdate(id, update, {
+      new: true,
+      runValidators: true,
+    });
 
-    if (!list) return res.status(404).json({ error: 'List not found' });
+    if (!list) return res.status(404).json({ error: "List not found" });
 
-    try { global.__boardEmit?.(list.boardId.toString(), 'list:updated', list); } catch {}
+    try {
+      global.__boardEmit?.(list.boardId.toString(), "list:updated", list);
+    } catch {}
 
     res.json(list);
   } catch (e) {
