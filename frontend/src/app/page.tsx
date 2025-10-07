@@ -27,7 +27,10 @@ export default function Page() {
 
       socket.connect()
       socket.emit('join-board', BOARD_ID)
-      socket.on('card:moved', (p: any) => moveCard(p._id, p.listId, p.order))
+      socket.on('card:moved', (p: unknown) => {
+        const card = p as Card
+        moveCard(card._id, card.listId, card.order)
+      })
       socket.on('list:created', async () => {
         const re = await api.get<List[]>('/api/lists', { params: { boardId: BOARD_ID } })
         setLists(re.data)
