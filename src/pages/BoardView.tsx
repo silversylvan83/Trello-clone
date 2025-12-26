@@ -3,6 +3,21 @@ import { useParams } from "react-router-dom";
 import { getBoard } from "../api/board.api";
 import { createList } from "../api/list.api";
 import { createCard, moveCard } from "../api/card.api";
+import {
+  Alert,
+  Box,
+  Button,
+  Card as MUICard,
+  CardContent,
+  CircularProgress,
+  IconButton,
+  Paper,
+  Stack,
+  TextField,
+  Tooltip,
+  Typography,
+} from "@mui/material";
+import AddIcon from "@mui/icons-material/Add";
 
 type List = { _id: string; title: string; order: number };
 type Card = { _id: string; listId: string; title: string; description: string; order: number };
@@ -17,21 +32,29 @@ export default function BoardView() {
   const [cards, setCards] = useState<Card[]>([]);
   const [listTitle, setListTitle] = useState("");
   const [err, setErr] = useState("");
+  const [loading, setLoading] = useState(false);
 
   async function load() {
     setErr("");
+    setLoading(true);
     try {
       const data = await getBoard(boardId);
       setBoard(data.board);
       setLists(data.lists);
       setCards(data.cards);
-    } catch (e: any) {
+      
+    } 
+    
+    catch (e: any) {
       setErr(e?.response?.data?.error || "Failed to load board");
+    } finally {
+      setLoading(false);
     }
   }
 
   useEffect(() => {
     load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [boardId]);
 
   const cardsByList = useMemo(() => {
@@ -49,17 +72,28 @@ export default function BoardView() {
   }, [lists, cards]);
 
   async function onAddList() {
-    if (!listTitle.trim()) return;
-    await createList(boardId, listTitle.trim());
-    setListTitle("");
-    load();
+    const title = listTitle.trim();
+    if (!title) return;
+    setErr("");
+    try {
+      await createList(boardId, title);
+      setListTitle("");
+      await load();
+    } catch (e: any) {
+      setErr(e?.response?.data?.error || "Failed to add list");
+    }
   }
 
   async function onAddCard(listId: string) {
     const title = window.prompt("Card title?");
     if (!title?.trim()) return;
-    await createCard(listId, title.trim());
-    load();
+    setErr("");
+    try {
+      await createCard(listId, title.trim());
+      await load();
+    } catch (e: any) {
+      setErr(e?.response?.data?.error || "Failed to add card");
+    }
   }
 
   const [dragCardId, setDragCardId] = useState<string | null>(null);
@@ -93,63 +127,117 @@ export default function BoardView() {
     }
   }
 
-  if (!board) return <div>Loading...</div>;
+  if (!board && loading) {
+    return (
+      <Box sx={{ display: "flex", justifyContent: "center", py: 6 }}>
+        <CircularProgress />
+      </Box>
+    );
+  }
+
+  if (!board) return <Typography sx={{ py: 3 }}>No board found.</Typography>;
 
   return (
-    <div>
-      <h2>{board.title}</h2>
-      {err && <div style={{ color: "crimson", marginBottom: 8 }}>{err}</div>}
+    <Box sx={{ px: 2, py: 2 }}>
+      <Typography variant="h5" fontWeight={700} sx={{ mb: 2 }}>
+        {board.title}
+      </Typography>
 
-      <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
-        <input placeholder="New list title" value={listTitle} onChange={(e) => setListTitle(e.target.value)} />
-        <button onClick={onAddList}>Add list</button>
-      </div>
+      {err && (
+        <Alert severity="error" sx={{ mb: 2 }}>
+          {err}
+        </Alert>
+      )}
 
-      <div style={{ display: "flex", gap: 12, overflowX: "auto", paddingBottom: 12 }}>
+      {/* Add List */}
+      <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5} sx={{ mb: 2 }}>
+        <TextField
+          label="New list title"
+          value={listTitle}
+          onChange={(e) => setListTitle(e.target.value)}
+          size="small"
+          fullWidth
+        />
+        <Button variant="contained" onClick={onAddList} sx={{ whiteSpace: "nowrap" }}>
+          Add list
+        </Button>
+      </Stack>
+
+      {/* Lists Row */}
+      <Box
+        sx={{
+          display: "flex",
+          gap: 2,
+          overflowX: "auto",
+          pb: 2,
+          alignItems: "flex-start",
+        }}
+      >
         {lists.map((l) => {
           const listCards = cardsByList.get(l._id) || [];
+
           return (
-            <div
+            <Paper
               key={l._id}
+              elevation={2}
               onDragOver={(e) => e.preventDefault()}
               onDrop={() => onDrop(l._id)}
-              style={{
-                minWidth: 280,
-                border: "1px solid #ddd",
-                borderRadius: 12,
-                padding: 10,
-                background: "#fafafa"
+              sx={{
+                minWidth: 300,
+                maxWidth: 300,
+                p: 1.5,
+                borderRadius: 3,
+                bgcolor: "grey.50",
               }}
             >
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <div style={{ fontWeight: 700 }}>{l.title}</div>
-                <button onClick={() => onAddCard(l._id)}>+ Card</button>
-              </div>
+              <Stack direction="row" alignItems="center" justifyContent="space-between" spacing={1}>
+                <Typography fontWeight={700} noWrap title={l.title}>
+                  {l.title}
+                </Typography>
 
-              <div style={{ display: "grid", gap: 8, marginTop: 10 }}>
+                <Tooltip title="Add card">
+                  <IconButton size="small" onClick={() => onAddCard(l._id)}>
+                    <AddIcon fontSize="small" />
+                  </IconButton>
+                </Tooltip>
+              </Stack>
+
+              <Stack spacing={1.2} sx={{ mt: 1.5 }}>
                 {listCards.map((c) => (
-                  <div
+                  <MUICard
                     key={c._id}
                     draggable
                     onDragStart={() => onDragStart(c._id)}
-                    style={{
-                      padding: 10,
-                      borderRadius: 10,
-                      background: "white",
-                      border: "1px solid #e5e5e5",
-                      cursor: "grab"
+                    variant="outlined"
+                    sx={{
+                      borderRadius: 2,
+                      cursor: "grab",
+                      "&:active": { cursor: "grabbing" },
+                      userSelect: "none",
                     }}
                     title="Drag me to another list"
                   >
-                    <div style={{ fontWeight: 600 }}>{c.title}</div>
-                    {c.description ? <div style={{ fontSize: 12, opacity: 0.8 }}>{c.description}</div> : null}
-                  </div>
+                    <CardContent sx={{ py: 1.2, "&:last-child": { pb: 1.2 } }}>
+                      <Typography fontWeight={650}>{c.title}</Typography>
+                      {c.description ? (
+                        <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                          {c.description}
+                        </Typography>
+                      ) : null}
+                    </CardContent>
+                  </MUICard>
                 ))}
-              </div>
-            </div>
+
+                {listCards.length === 0 ? (
+                  <Typography variant="body2" color="text.secondary" sx={{ px: 0.5, py: 1 }}>
+                    Drop a card here…
+                  </Typography>
+                ) : null}
+              </Stack>
+            </Paper>
           );
         })}
-      </div>
-    </div>
+      </Box>
+    </Box>
   );
 }

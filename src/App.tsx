@@ -39,7 +39,7 @@ export default function App() {
               fontWeight: 700,
             }}
           >
-            Trello Clone
+            Stackly
           </Typography>
 
           <Box sx={{ flexGrow: 1 }} />
